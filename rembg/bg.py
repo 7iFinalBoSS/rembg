@@ -40,17 +40,12 @@ def alpha_matting_cutout(
     foreground_threshold: int,
     background_threshold: int,
     erode_structure_size: int,
+    guided_filter_radius: int = 10,
+    guided_filter_eps: float = 1e-2
 ) -> PILImage:
     """
     Perform alpha matting on an image using a given mask and threshold values.
-
-    This function takes a PIL image `img` and a PIL image `mask` as input, along with
-    the `foreground_threshold` and `background_threshold` values used to determine
-    foreground and background pixels. The `erode_structure_size` parameter specifies
-    the size of the erosion structure to be applied to the mask.
-
-    The function returns a PIL image representing the cutout of the foreground object
-    from the original image.
+    Adds guided filtering for better edge preservation.
     """
     if img.mode == "RGBA" or img.mode == "CMYK":
         img = img.convert("RGB")
@@ -78,8 +73,12 @@ def alpha_matting_cutout(
     trimap_normalized = trimap / 255.0
 
     alpha = estimate_alpha_cf(img_normalized, trimap_normalized)
-    foreground = estimate_foreground_ml(img_normalized, alpha)
-    cutout = stack_images(foreground, alpha)
+
+    # Apply guided filter to smooth edges and preserve details
+    alpha_guided = cv2.ximgproc.guidedFilter(np.array(img_normalized, dtype=np.float32), alpha, guided_filter_radius, guided_filter_eps)
+
+    foreground = estimate_foreground_ml(img_normalized, alpha_guided)
+    cutout = stack_images(foreground, alpha_guided)
 
     cutout = np.clip(cutout * 255, 0, 255).astype(np.uint8)
     cutout = Image.fromarray(cutout)
